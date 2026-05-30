@@ -1,0 +1,6 @@
+config.json
+scanner_state.json
+milford_scanner.log
+debug_snapshots/
+__pycache__/
+*.pyc

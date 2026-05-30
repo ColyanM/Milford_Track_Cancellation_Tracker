@@ -1,0 +1,52 @@
+{
+  "track_name": "Milford Track",
+  "party_size": 2,
+  "scan_start_date": "2026-11-01",
+  "scan_last_departure_date": "2027-04-28",
+  "check_interval_seconds": 180,
+  "cooldown_hours_per_date": 24,
+  "doc_booking_home": "https://bookings.doc.govt.nz/Web/Default.aspx",
+  "availability_api": {
+    "url": "https://prod-nz-rdr.recreation-management.tylerapp.com/nzrdr/rdr/search/greatwalkplacefacility",
+    "method": "POST",
+    "placeId": 873,
+    "customerClassificationId": 0,
+    "accomodation": "",
+    "nights": 11
+  },
+  "hut_sequence": [
+    {
+      "night_offset": 0,
+      "hut_name": "Clinton Hut"
+    },
+    {
+      "night_offset": 1,
+      "hut_name": "Mintaro Hut"
+    },
+    {
+      "night_offset": 2,
+      "hut_name": "Dumpling Hut"
+    }
+  ],
+  "availability_rules": {
+    "require_is_available": true,
+    "require_total_available_for_party_size": true,
+    "note": "Requires each hut/date to have TotalAvailable >= party_size."
+  },
+  "email": {
+    "enabled": false,
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 465,
+    "from_email": "PLACEHOLDER@gmail.com",
+    "to_email": "PLACEHOLDER@example.com",
+    "app_password": "APP_PASSWORD_NOT_YOUR_EMAIL_PASSWORD"
+  },
+  "browser": {
+    "headless": false,
+    "timeout_seconds": 90
+  },
+  "advanced": {
+    "debug_folder": "debug_snapshots",
+    "save_each_window_sample": false
+  }
+}
