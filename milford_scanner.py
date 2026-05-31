@@ -72,10 +72,33 @@ def mark_alerted(state, start_date_text): #Records an alert sent for a date
     state.setdefault("alerts", {})[start_date_text] = datetime.now().isoformat(timespec="seconds")
     save_json(STATE_PATH, state)
 
-def main(): #Testing before adding more logic
-    setup_logging()
-    logging.info("Scanner config loaded.")
 
+def max_hut_offset(config): #Finds the last night to offset properly
+    return max(int(h["night_offset"]) for h in config["hut_sequence"])
+
+
+def make_hut_dates(config, start_date: date): #Makes the hut and dates, milford is just one version
+    return [
+        {
+            "hut_name": h["hut_name"],
+            "date": start_date + timedelta(days=int(h["night_offset"])),
+            "night_offset": int(h["night_offset"]),
+        }
+        for h in config["hut_sequence"]
+    ]
+
+def main(): #Just testing still will update later
+    setup_logging()
+    config = load_config()
+
+    start_date = parse_date(config["scan_start_date"])
+    hut_dates = make_hut_dates(config, start_date)
+
+    print(f"Loaded {config['track_name']} scanner config.")
+    print(f"Maximum hut offset: {max_hut_offset(config)}")
+
+    for hut in hut_dates:
+        print(f"{yyyy_mm_dd(hut['date'])}: {hut['hut_name']}")
 
 if __name__ == "__main__":
     main()
