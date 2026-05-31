@@ -87,18 +87,57 @@ def make_hut_dates(config, start_date: date): #Makes the hut and dates, milford 
         for h in config["hut_sequence"]
     ]
 
-def main(): #Just testing still will update later
+def window_step_days(config): #Calculates how far the window can go (shows 11 nights on desktop screen)
+    api_nights = int(config["availability_api"].get("nights", 11))
+    step = api_nights - max_hut_offset(config) + 1
+
+    if step < 1:
+        raise ValueError("API nights must be larger than the maximum hut night_offset.")
+
+    return step
+
+
+def iter_window_starts(config): #Start date for each multi day window
+    scan_start = parse_date(config["scan_start_date"])
+    scan_end = parse_date(config["scan_last_departure_date"])
+    step = window_step_days(config)
+
+    current = scan_start
+    while current <= scan_end:
+        yield current
+        current += timedelta(days=step)
+
+
+def iter_starts_inside_window(config, window_start: date): #All possible start dates with one API. Doing this so I call less API calls vs calling every day
+    scan_end = parse_date(config["scan_last_departure_date"])
+    max_offset = max_hut_offset(config)
+    api_nights = int(config["availability_api"].get("nights", 11))
+
+    latest_start_in_window = min(
+        window_start + timedelta(days=api_nights - max_offset),
+        scan_end,
+    )
+
+    current = window_start
+    while current <= latest_start_in_window:
+        yield current
+        current += timedelta(days=1)
+
+def main(): #Testing how many windows and start dates scanned
     setup_logging()
     config = load_config()
 
-    start_date = parse_date(config["scan_start_date"])
-    hut_dates = make_hut_dates(config, start_date)
+    windows = list(iter_window_starts(config))
+    checked_starts = sum(
+        1
+        for window_start in windows
+        for _ in iter_starts_inside_window(config, window_start)
+    )
 
     print(f"Loaded {config['track_name']} scanner config.")
-    print(f"Maximum hut offset: {max_hut_offset(config)}")
-
-    for hut in hut_dates:
-        print(f"{yyyy_mm_dd(hut['date'])}: {hut['hut_name']}")
+    print(f"Window step: {window_step_days(config)} days")
+    print(f"Windows to check: {len(windows)}")
+    print(f"Possible start dates to check: {checked_starts}")
 
 if __name__ == "__main__":
     main()
