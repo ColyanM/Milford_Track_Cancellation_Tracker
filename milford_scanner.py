@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import logging
 import sys
+from datetime import date, datetime
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -34,6 +35,17 @@ def setup_logging(): #Writes the messages in the terminal and the log file (see 
             logging.StreamHandler(sys.stdout),
         ],
     )
+
+def parse_date(s: str) -> date: #Converts a YYYY-MM-DD into an object
+    return datetime.strptime(s, "%Y-%m-%d").date()
+
+
+def yyyy_mm_dd(d: date) -> str: #Formats objet from above as YYYY-MM-DD
+    return d.strftime("%Y-%m-%d")
+
+
+def weekday_name_from_text(date_text: str) -> str: #Returns weekday name for the date
+    return datetime.strptime(date_text, "%Y-%m-%d").strftime("%A")
 
 def main(): #Testing before adding more logic
     setup_logging()
