@@ -199,6 +199,89 @@ def find_facility_date(facility, target_date: date): #One hut on that date
 
     return None
 
+def analyse_start_date(config, data, start_date: date): #Checks if all 3 huts are available 
+    rules = config.get("availability_rules", {})
+    require_is_available = bool(rules.get("require_is_available", True))
+    require_total = bool(rules.get("require_total_available_for_party_size", True))
+    party_size = int(config.get("party_size", 1))
+
+    hut_results = []
+
+    for hd in make_hut_dates(config, start_date):
+        hut_name = hd["hut_name"]
+        hut_date = hd["date"]
+
+        facility = find_facility(data, hut_name)
+        row = find_facility_date(facility, hut_date) if facility else None
+
+        if not facility:
+            hut_results.append({
+                "hut_name": hut_name,
+                "date": yyyy_mm_dd(hut_date),
+                "found_facility": False,
+                "found_date": False,
+                "is_available": False,
+                "total_available": None,
+                "passes": False,
+                "reason": "Facility not found in JSON",
+            })
+            continue
+
+        if not row:
+            hut_results.append({
+                "hut_name": hut_name,
+                "date": yyyy_mm_dd(hut_date),
+                "found_facility": True,
+                "found_date": False,
+                "is_available": False,
+                "total_available": None,
+                "passes": False,
+                "reason": "Date not found for facility in JSON",
+            })
+            continue
+
+        is_available = bool(row.get("IsAvailable", False))
+        total_available = row.get("TotalAvailable", None)
+
+        passes = True
+        reasons = []
+
+        if require_is_available and not is_available:
+            passes = False
+            reasons.append("IsAvailable is false")
+
+        if require_total:
+            try:
+                if int(total_available) < party_size:
+                    passes = False
+                    reasons.append(f"TotalAvailable {total_available} is below party size {party_size}")
+            except Exception:
+                passes = False
+                reasons.append(f"TotalAvailable was not numeric: {total_available}")
+
+        if passes:
+            reasons.append("Passes configured availability rules")
+
+        hut_results.append({
+            "hut_name": hut_name,
+            "date": yyyy_mm_dd(hut_date),
+            "found_facility": True,
+            "found_date": True,
+            "is_available": is_available,
+            "total_available": total_available,
+            "passes": passes,
+            "reason": "; ".join(reasons),
+            "raw_row": row,
+        })
+
+    all_pass = all(h.get("passes", False) for h in hut_results)
+
+    return {
+        "start_date": yyyy_mm_dd(start_date),
+        "is_possible_match": all_pass,
+        "hut_results": hut_results,
+    }
+
 def main(): #Testing first availability window (hasn't been working)
     setup_logging()
     config = load_config()
