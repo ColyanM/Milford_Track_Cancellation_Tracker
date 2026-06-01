@@ -182,6 +182,22 @@ def fetch_window_availability(session, config, window_start: date): #Requests th
             f"response_length={len(text)}. Saved BAD_RESPONSE file."
         ) from exc
 
+def find_facility(data, facility_name): #Find the specific hut in the API
+    for facility in data.get("GreatWalkFacilityData", []):
+        if facility.get("FacilityName", "").strip().lower() == facility_name.strip().lower():
+            return facility
+    return None
+
+
+def find_facility_date(facility, target_date: date): #One hut on that date
+    target_prefix = yyyy_mm_dd(target_date)
+
+    for row in facility.get("GreatWalkFacilityDateData", []):
+        arrival = row.get("ArrivalDate", "")
+        if arrival.startswith(target_prefix):
+            return row
+
+    return None
 
 def main(): #Testing first availability window (hasn't been working)
     setup_logging()
