@@ -9,6 +9,7 @@ import logging
 import sys
 from datetime import date, datetime
 from datetime import timedelta
+import requests
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -150,14 +151,56 @@ def save_bad_response(config, window_start, payload, response, text): #Having is
         errors="replace",
     )
 
-def main(): #Testing the JSON being sent to DOC
+def fetch_window_availability(session, config, window_start: date): #Requests the full grid view from DOC
+    api = config["availability_api"]
+    payload = build_payload(config, window_start)
+    timeout = int(config.get("http", {}).get("timeout_seconds", 90))
+
+    response = session.post(
+        api["url"],
+        json=payload,
+        headers={
+            "accept": "application/json, text/plain, */*",
+            "origin": "https://bookings.doc.govt.nz",
+            "referer": "https://bookings.doc.govt.nz/Web/Default.aspx",
+        },
+        timeout=timeout,
+    )
+
+    text = response.text
+
+    if not response.ok:
+        save_bad_response(config, window_start, payload, response, text)
+        raise RuntimeError(f"API returned HTTP {response.status_code}. Saved BAD_RESPONSE file.")
+
+    try:
+        return response.json(), payload
+    except ValueError as exc:
+        save_bad_response(config, window_start, payload, response, text)
+        raise RuntimeError(
+            f"API did not return JSON. status={response.status_code}. "
+            f"response_length={len(text)}. Saved BAD_RESPONSE file."
+        ) from exc
+
+
+def main(): #Testing first availability window (hasn't been working)
     setup_logging()
     config = load_config()
 
-    first_window = next(iter_window_starts(config))
-    payload = build_payload(config, first_window)
+    session = requests.Session()
+    session.headers.update({
+        "user-agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+    })
 
-    print(json.dumps(payload, indent=2))
+    first_window = next(iter_window_starts(config))
+    data, _ = fetch_window_availability(session, config, first_window)
+
+    facilities = data.get("GreatWalkFacilityData", [])
+    print(f"Fetched {len(facilities)} facilities.")
 
 if __name__ == "__main__":
     main()
