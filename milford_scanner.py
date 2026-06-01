@@ -123,21 +123,25 @@ def iter_starts_inside_window(config, window_start: date): #All possible start d
         yield current
         current += timedelta(days=1)
 
-def main(): #Testing how many windows and start dates scanned
+def build_payload(config, window_start: date): #JSON that DOC website expects
+    api = config["availability_api"]
+
+    return {
+        "accomodation": api.get("accomodation", ""),
+        "placeId": int(api["placeId"]),
+        "customerClassificationId": int(api.get("customerClassificationId", 0)),
+        "arrivalDate": yyyy_mm_dd(window_start),
+        "nights": int(api.get("nights", 11)),
+    }
+
+def main(): #Testing the JSON being sent to DOC
     setup_logging()
     config = load_config()
 
-    windows = list(iter_window_starts(config))
-    checked_starts = sum(
-        1
-        for window_start in windows
-        for _ in iter_starts_inside_window(config, window_start)
-    )
+    first_window = next(iter_window_starts(config))
+    payload = build_payload(config, first_window)
 
-    print(f"Loaded {config['track_name']} scanner config.")
-    print(f"Window step: {window_step_days(config)} days")
-    print(f"Windows to check: {len(windows)}")
-    print(f"Possible start dates to check: {checked_starts}")
+    print(json.dumps(payload, indent=2))
 
 if __name__ == "__main__":
     main()
