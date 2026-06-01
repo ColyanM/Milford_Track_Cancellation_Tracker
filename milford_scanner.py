@@ -48,13 +48,11 @@ def yyyy_mm_dd(d: date) -> str: #Formats objet from above as YYYY-MM-DD
 def weekday_name_from_text(date_text: str) -> str: #Returns weekday name for the date
     return datetime.strptime(date_text, "%Y-%m-%d").strftime("%A")
 
-def save_json(path: Path, data):
-    """Write JSON data in a readable format."""
+def save_json(path: Path, data): #Makes JSON readable
     path.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
 
 
-def load_state():
-    """Load alert history so the scanner does not email repeatedly."""
+def load_state(): #Loads alert history
     if STATE_PATH.exists():
         return load_json(STATE_PATH)
     return {"alerts": {}}
@@ -133,6 +131,24 @@ def build_payload(config, window_start: date): #JSON that DOC website expects
         "arrivalDate": yyyy_mm_dd(window_start),
         "nights": int(api.get("nights", 11)),
     }
+
+def save_bad_response(config, window_start, payload, response, text): #Having issues so making bad responses save to review
+    debug_dir = BASE_DIR / config.get("advanced", {}).get("debug_folder", "debug_snapshots")
+    debug_dir.mkdir(exist_ok=True)
+
+    body = {
+        "window_start": yyyy_mm_dd(window_start),
+        "request_payload": payload,
+        "status": response.status_code,
+        "headers": dict(response.headers),
+        "response_text": text,
+    }
+
+    (debug_dir / f"BAD_RESPONSE_{yyyy_mm_dd(window_start)}.txt").write_text(
+        json.dumps(body, indent=2, ensure_ascii=False),
+        encoding="utf-8",
+        errors="replace",
+    )
 
 def main(): #Testing the JSON being sent to DOC
     setup_logging()
