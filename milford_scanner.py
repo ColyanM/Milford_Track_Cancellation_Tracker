@@ -10,6 +10,8 @@ import sys
 from datetime import date, datetime
 from datetime import timedelta
 import requests
+import smtplib
+from email.message import EmailMessage
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -281,6 +283,76 @@ def analyse_start_date(config, data, start_date: date): #Checks if all 3 huts ar
         "is_possible_match": all_pass,
         "hut_results": hut_results,
     }
+
+def send_email(config, subject, body):     #Send an email alert, or log the alert body when email is set to false
+    email_cfg = config["email"]
+    if not email_cfg.get("enabled", False):
+        logging.info("Email disabled. Alert body:\n%s", body)
+        return
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = email_cfg["from_email"]
+    msg["To"] = email_cfg["to_email"]
+    msg.set_content(body)
+
+    with smtplib.SMTP_SSL(email_cfg["smtp_server"], int(email_cfg["smtp_port"])) as smtp:
+        smtp.login(email_cfg["from_email"], email_cfg["app_password"])
+        smtp.send_message(msg)
+
+def maybe_send_status_email(config, state, stats): #Handles the hourly status email
+    now = datetime.now()
+    last_status = state.get("last_status_email")
+
+    if last_status:
+        last_status_time = datetime.fromisoformat(last_status)
+        if now - last_status_time < timedelta(hours=1):
+            return
+
+    subject = "Milford scanner still running"
+
+    body = "\n".join([
+        "Milford DOC scanner is still running.",
+        "",
+        f"Last full scan completed: {now.strftime('%Y-%m-%d %H:%M:%S')}",
+        f"Windows checked: {stats.get('windows')}",
+        f"Start dates checked: {stats.get('checked_starts')}",
+        f"Possible matches found this scan: {stats.get('matches')}",
+        "",
+        "No action needed. This is just a status email.",
+    ])
+
+    send_email(config, subject, body)
+
+    state["last_status_email"] = now.isoformat(timespec="seconds")
+    save_json(STATE_PATH, state)
+
+def build_alert(config, result): #Build the email body for a possible match from cancellation 
+    lines = [
+        "Milford Track DOC availability may be open!!!",
+        "",
+        f"Party size configured: {config['party_size']}",
+        f"Start date: {result['start_date']} ({weekday_name_from_text(result['start_date'])})",
+        "",
+        "Required hut sequence:",
+    ]
+
+    for h in result["hut_results"]:
+        lines.append(
+            f"- {h['date']} ({weekday_name_from_text(h['date'])}): {h['hut_name']} | "
+            f"IsAvailable={h.get('is_available')} | "
+            f"TotalAvailable={h.get('total_available')}"
+        )
+
+    lines += [
+        "",
+        "Book manually here:",
+        config.get("doc_booking_home", "https://bookings.doc.govt.nz/Web/Default.aspx"),
+        "",
+        "Verify the date on DOC before changing travel plans.",
+    ]
+
+    return "\n".join(lines)
 
 def main(): #Testing first availability window (hasn't been working)
     setup_logging()
