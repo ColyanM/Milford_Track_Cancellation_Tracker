@@ -12,6 +12,8 @@ from datetime import timedelta
 import requests
 import smtplib
 from email.message import EmailMessage
+import random
+import time
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -354,7 +356,95 @@ def build_alert(config, result): #Build the email body for a possible match from
 
     return "\n".join(lines)
 
-def main(): #Testing first availability window (hasn't been working)
+def run_once(config, session, state): #Run a complete scan across all grids/windows
+    debug_dir = BASE_DIR / config.get("advanced", {}).get("debug_folder", "debug_snapshots")
+    debug_dir.mkdir(exist_ok=True)
+    save_each_window = bool(config.get("advanced", {}).get("save_each_window_sample", False))
+
+    checked_starts = 0
+    matches = 0
+    windows = 0
+
+    for window_start in iter_window_starts(config):
+        windows += 1
+
+        try:
+            data, payload = fetch_window_availability(session, config, window_start)
+
+            if windows == 1 or save_each_window:
+                (debug_dir / f"{yyyy_mm_dd(window_start)}_window_response.json").write_text(
+                    json.dumps(data, indent=2, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+
+            window_checked = 0
+            window_matches = 0
+            last_start_text = None
+
+            for start_date in iter_starts_inside_window(config, window_start):
+                checked_starts += 1
+                window_checked += 1
+                start_text = yyyy_mm_dd(start_date)
+                last_start_text = start_text
+
+                result = analyse_start_date(config, data, start_date)
+
+                summary = ", ".join(
+                    f"{h['hut_name']}:{h.get('is_available')}/total={h.get('total_available')}"
+                    for h in result["hut_results"]
+                )
+
+                logging.info("Checked %s possible=%s | %s", start_text, result["is_possible_match"], summary)
+
+                if result["is_possible_match"]:
+                    matches += 1
+                    window_matches += 1
+
+                    (debug_dir / f"MATCH_{start_text}.json").write_text(
+                        json.dumps(result, indent=2, ensure_ascii=False),
+                        encoding="utf-8",
+                    )
+
+                    cooldown = int(config.get("cooldown_hours_per_date", 0))
+
+                    if should_alert(state, start_text, cooldown):
+                        send_email(
+                            config,
+                            f"Milford availability possible: {start_text} ({weekday_name_from_text(start_text)})",
+                            build_alert(config, result),
+                        )
+                        mark_alerted(state, start_text)
+                        logging.info("Sent alert for %s", start_text)
+                    else:
+                        logging.info("Already alerted recently for %s", start_text)
+
+            logging.info(
+                "Window %s to %s checked_starts=%s matches=%s",
+                yyyy_mm_dd(window_start),
+                last_start_text or yyyy_mm_dd(window_start),
+                window_checked,
+                window_matches,
+            )
+
+            time.sleep(0.7)
+
+        except Exception as exc:
+            logging.exception("Error checking window starting %s: %s", yyyy_mm_dd(window_start), exc)
+
+    logging.info(
+        "Completed scan. windows=%s checked_starts=%s possible_matches=%s",
+        windows,
+        checked_starts,
+        matches,
+    )
+
+    return {
+        "windows": windows,
+        "checked_starts": checked_starts,
+        "matches": matches,
+    }
+
+def main(): #Runs the scanner constantly 
     setup_logging()
     config = load_config()
 
@@ -367,11 +457,21 @@ def main(): #Testing first availability window (hasn't been working)
         )
     })
 
-    first_window = next(iter_window_starts(config))
-    data, _ = fetch_window_availability(session, config, first_window)
+    interval = int(config.get("check_interval_seconds", 180))
 
-    facilities = data.get("GreatWalkFacilityData", [])
-    print(f"Fetched {len(facilities)} facilities.")
+    logging.info("Milford scanner started. Interval=%s seconds", interval)
+    logging.info("Using DOC JSON endpoint: %s", config["availability_api"]["url"])
+
+    while True:
+        state = load_state()
+        stats = run_once(config, session, state)
+
+        state = load_state()
+        maybe_send_status_email(config, state, stats)
+
+        sleep_seconds = random.randint(120, 200)
+        logging.info("Sleeping %s seconds.", sleep_seconds)
+        time.sleep(sleep_seconds)
 
 if __name__ == "__main__":
     main()
