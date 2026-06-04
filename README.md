@@ -76,12 +76,12 @@ checking again.
 Files created while running
 ---------------------------
 
-These files are created by the scanner and are ignored by git:
+These local files are ignored by git:
 
-- `config.json` - your private local config
-- `scanner_state.json` - remembers alert cooldowns and status email timing
-- `milford_scanner.log` - scan history and errors
-- `debug_snapshots/` - saved API responses and possible match details
+- `config.json` - your private local config, created by you (MUST DO)
+- `scanner_state.json` - created by the scanner to remember alert cooldowns and status email timing
+- `milford_scanner.log` - created by the scanner for scan history and errors
+- `debug_snapshots/` - created by the scanner for saved API responses and possible match details
 
 Notes
 -----
